@@ -1,1 +1,1 @@
-# DS160_Final_Project_CBD
+# This project explores student performance factors to understand which variables are the most predictive of exam success. Using a dataset containing demographic, behavioral, and academic performance indicators, the aim is to identify key contributors to high or low exam scores. The project focuses on predicting whether a student’s final exam score is above or below average. Initial data exploration reveals correlations between study time, previous scores, internet access, and exam results as well as others.
