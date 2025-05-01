@@ -1,0 +1,262 @@
+---
+title: Student Data R
+output:
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggcorrplot)
+```
+
+```{r}
+Students=read.csv("StudentPerformanceFactors.csv")
+```
+
+```{r}
+View(Students)
+```
+
+```{r}
+glimpse(Students)
+```
+
+```{r}
+colSums(is.na(Students))
+```
+
+```{r}
+summary(Students)
+```
+
+```{r}
+# The gap is calculated as the difference between Exam_Score and Previous_Scores
+Students <- Students %>%
+  mutate(PerformanceGap = Exam_Score - Previous_Scores)
+```
+
+```{r}
+cor_matrix=cor(Students[, c("Exam_Score", "Previous_Scores", "Hours_Studied", "PerformanceGap", "Attendance", "Sleep_Hours")])
+
+ggcorrplot(cor_matrix, lab = TRUE, lab_size = 3, method = "circle", type = "upper", 
+           colors = c("red", "white", "blue"), title = "Correlation Heatmap of Student Performance Factors")
+```
+
+```{r}
+#Histogram for the Exam_Score variable:
+ggplot(Students, aes(x = Exam_Score)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "white") +
+  labs(title = "Distribution of Exam Scores", x = "Exam Score", y = "Frequency")
+```
+
+```{r}
+#The mean exam score
+mean_score <- round(mean(Students$Exam_Score, na.rm = TRUE))
+
+#Examines the relationship between Hours_Studied and Exam_Score
+ggplot(Students, aes(x = Hours_Studied, y = Exam_Score)) + geom_point(color = "darkorange", size = 2.5) + geom_hline(yintercept = mean_score, linetype = "dashed", color = "black", linewidth = 1) +  geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +
+  labs(title = "Study Time vs Exam Score", x = "Study Time", y = "Exam Score")
+```
+```{r}
+#distribution of Exam_Score for each level of Parental_Involvement
+ggplot(Students, aes(x = as.factor(Parental_Involvement), y = Exam_Score, fill = as.factor(Parental_Involvement))) +
+  geom_boxplot() +
+  labs( title = "Exam Score Distribution by Parental Involvement",
+    x = "Parental Involvement", y = "Exam Score",
+    fill = "Parental Involvement" ) +
+  theme_minimal(base_size = 14)
+```
+```{r}
+#Exam_Score distribution across different Motivation_Level groups
+ggplot(Students, aes(x = Motivation_Level, y = Exam_Score, fill = Motivation_Level)) +
+  geom_boxplot()
+  labs(title = "Impact of Motivation on Exam Scores",
+       x = "Motivation Level", y = "Exam Score") +
+  theme_minimal()
+```
+
+```{r}
+#Load the GGally package
+library(GGally)
+
+ggpairs(Students[, c("Exam_Score", "Previous_Scores", "Hours_Studied", "Attendance", "Sleep_Hours")],
+        title = "Pairwise Relationships Among Student Performance Factors")
+
+```
+
+
+```{r}
+#Fit a linear regression model to predict Exam_Score using: Previous_Scores, Hours_Studied, Attendance, and Sleep_Hours
+
+model_regrssion=lm(Exam_Score ~ Previous_Scores + Hours_Studied + Attendance + Sleep_Hours, data = Students)
+summary(model_regrssion)
+
+# Predict exam scores for each student using the fitted model
+Students$Predicted_Score <- predict(model_regrssion)
+
+# Calculate the mean exam score and mean predicted score (rounded for readability)
+mean_actual <- round(mean(Students$Exam_Score, na.rm = TRUE))
+mean_predicted <- round(mean(Students$Predicted_Score, na.rm = TRUE))
+
+# Plot Actual vs. Predicted Exam Scores
+# - Points represent individual students
+ggplot(Students, aes(y = Exam_Score, x = Predicted_Score)) +
+  geom_point(color = "blue", size = 3) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 1) +
+  labs(title = "Actual vs Predicted Exam Scores",
+       y = "Actual Exam Score", x = "Predicted Exam Score")
+```
+
+```{r}
+#Fit another linear regression model (model_regrssion2) using Sleep_Hours and Hours_Studied as predictors
+model_regrssion2=lm(Exam_Score ~ + Sleep_Hours + Hours_Studied , data = Students)
+summary(model_regrssion2)
+
+Students$Predicted_Score2 <- predict(model_regrssion2)
+
+ggplot(Students, aes(y = Exam_Score, x = Predicted_Score)) +
+  geom_point(color = "blue", size = 3) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 1) +
+  labs(title = "Actual vs Predicted Exam Scores",
+       y = "Actual Exam Score", x = "Predicted Exam Score")
+```
+
+```{r}
+#install.packages("caret")
+library(caret)
+
+#Add a new variable 'AboveAverage' to indicate if a student's Exam_Score is above the mean.
+Students <- Students %>%
+  mutate(AboveAverage = ifelse(Exam_Score > mean(Exam_Score, na.rm = TRUE), 1, 0))
+
+# 80% for training and 20% for testing
+train_index <- createDataPartition(Students$AboveAverage, p = 0.8, list = FALSE)
+train_data <- Students[train_index, ]
+test_data <- Students[-train_index, ]
+
+# Fit a logistic regression model to predict AboveAverage
+model_log <- glm(AboveAverage ~ Parental_Involvement + Extracurricular_Activities
+ + Motivation_Level + Internet_Access + Family_Income + Teacher_Quality + School_Type + Peer_Influence + Parental_Education_Level + Distance_from_Home, 
+                 data = train_data, family = "binomial")
+summary(model_log)
+```
+
+```{r}
+test_data$Predicted_Prob <- predict(model_log, newdata = test_data, type = "response")
+test_data$Predicted_Class <- ifelse(test_data$Predicted_Prob > 0.5, 1, 0)
+
+con <- table(Predicted = test_data$Predicted_Class, Actual = test_data$AboveAverage)
+print(con)
+
+#Calculate the prediction accuracy by comparing predicted and actual binary outcomes.
+accuracy <- mean(test_data$Predicted_Class == test_data$AboveAverage)
+print(paste("Accuracy:", round(accuracy, 3)))
+```
+
+```{r}
+#density plot to visualize the distribution of predicted probabilities from the logistic model
+ggplot(Students, aes(x = Predicted_Prob, fill = as.factor(AboveAverage))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Distribution of Predicted Probabilities by Actual Class",
+       x = "Predicted Probability of Scoring Above Average",
+       fill = "Actual Class") +
+  theme_minimal()
+```
+```{r}
+# Create the confusion matrix for model_log
+conf_matrix <- table(Predicted = test_data$Predicted_Class, Actual = test_data$AboveAverage)
+
+# Convert the table to a data frame for ggplot
+conf_df <- as.data.frame(conf_matrix)
+
+# Create a column with labels for each cell
+conf_df$Result <- with(conf_df, ifelse(Predicted == 0 & Actual == 0, "True Negative",
+                              ifelse(Predicted == 1 & Actual == 1, "True Positive",
+                              ifelse(Predicted == 1 & Actual == 0, "False Positive",
+                              ifelse(Predicted == 0 & Actual == 1, "False Negative", NA)))))
+
+# Combine the result label and the frequency
+conf_df$Label <- paste(conf_df$Result, "\n", conf_df$Freq)
+
+# Plot the confusion matrix with custom labels and colors
+ggplot(conf_df, aes(x = as.factor(Actual), y = as.factor(Predicted), fill = Freq)) +
+  geom_tile(color = "white", size = 1) +
+  geom_text(aes(label = Label), color = "black", size = 5) +
+  scale_fill_gradient(low = "#F7FBFF", high = "#08306B") +
+  labs(
+    title = "Confusion Matrix (Model Log)",
+    x = "Actual Class",
+    y = "Predicted Class",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+```
+
+```{r}
+#Fit a reduced logistic regression model
+model_log_reduced <- glm(AboveAverage ~ Parental_Involvement + Motivation_Level + Family_Income + Extracurricular_Activities + Peer_Influence + Parental_Education_Level + Teacher_Quality,
+                         data = train_data, family = "binomial")
+
+summary(model_log_reduced)
+```
+```{r}
+#Predict probabilities on the test set using the reduced logistic model.
+test_data$Predicted_Prob_Reduced <- predict(model_log_reduced, newdata = test_data, type = "response")
+test_data$Predicted_Class_Reduced <- ifelse(test_data$Predicted_Prob_Reduced > 0.5, 1, 0)
+
+con_reduced <- table(Predicted = test_data$Predicted_Class_Reduced, Actual = test_data$AboveAverage)
+print(con_reduced)
+
+# Calculate and print the accuracy of the reduced model.
+accuracy_reduced <- mean(test_data$Predicted_Class_Reduced == test_data$AboveAverage)
+print(paste("Reduced Model Accuracy:", round(accuracy_reduced, 3)))
+```
+```{r}
+#distribution of predicted probabilities from the reduced logistic model
+ggplot(test_data, aes(x = Predicted_Prob_Reduced, fill = as.factor(AboveAverage))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Distribution of Predicted Probabilities by Actual Class",
+       x = "Predicted Probability of Scoring Above Average",
+       fill = "Actual Class") +
+  theme_minimal()
+```
+
+```{r}
+
+conf_matrix <- table(
+  Predicted = test_data$Predicted_Class_Reduced, 
+  Actual = test_data$AboveAverage
+)
+
+conf_df <- as.data.frame(conf_matrix)
+
+conf_df$Result <- with(conf_df, ifelse(Predicted == "0" & Actual == "0", "True Negative",
+                               ifelse(Predicted == "1" & Actual == "1", "True Positive",
+                               ifelse(Predicted == "1" & Actual == "0", "False Positive",
+                               ifelse(Predicted == "0" & Actual == "1", "False Negative", NA)))))
+
+
+conf_df$Label <- paste(conf_df$Result, "\n", conf_df$Freq)
+
+
+ggplot(conf_df, aes(x = as.factor(Actual), y = as.factor(Predicted), fill = Freq)) +
+  geom_tile(color = "white", size = 1) +
+  geom_text(aes(label = Label), color = "black", size = 5) +
+  scale_fill_gradient(low = "#F7FBFF", high = "#08306B") +
+  labs(
+    title = "Confusion Matrix (Reduced Model)",
+    x = "Actual Class",
+    y = "Predicted Class",
+    fill = "Frequency"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold"))
+```
+
